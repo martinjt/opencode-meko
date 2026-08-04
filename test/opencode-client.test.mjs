@@ -168,3 +168,60 @@ test("isInstalled reflects presence of ~/.config/opencode", () => {
   // just assert it returns a boolean without throwing.
   assert.equal(typeof adapter.isInstalled(), "boolean");
 });
+
+test("installSkills writes a sentinel-fenced Meko block to AGENTS.md", () => {
+  const dir = mkdtempSync(join(tmpdir(), "meko-opencode-test-"));
+  const agentsMdPath = join(dir, "AGENTS.md");
+  const adapter = createOpencodeAdapter({
+    getConfigPath: () => join(dir, "opencode.json"),
+    getAgentsMdPath: () => agentsMdPath,
+  });
+  try {
+    const result = adapter.installSkills({
+      name: "meko",
+      dryRun: false,
+      log: silentLog(),
+      scope: "user",
+    });
+    assert.equal(result.skills, "ok");
+    const content = readFileSync(agentsMdPath, "utf8");
+    assert.match(content, /meko:start/);
+    assert.match(content, /mcp__meko__memory_search/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installSkills is idempotent (second run produces the same content)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "meko-opencode-test-"));
+  const agentsMdPath = join(dir, "AGENTS.md");
+  const adapter = createOpencodeAdapter({
+    getConfigPath: () => join(dir, "opencode.json"),
+    getAgentsMdPath: () => agentsMdPath,
+  });
+  try {
+    adapter.installSkills({ name: "meko", dryRun: false, log: silentLog(), scope: "user" });
+    const first = readFileSync(agentsMdPath, "utf8");
+    adapter.installSkills({ name: "meko", dryRun: false, log: silentLog(), scope: "user" });
+    const second = readFileSync(agentsMdPath, "utf8");
+    assert.equal(first, second);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installSkills dryRun does not touch AGENTS.md", () => {
+  const dir = mkdtempSync(join(tmpdir(), "meko-opencode-test-"));
+  const agentsMdPath = join(dir, "AGENTS.md");
+  const adapter = createOpencodeAdapter({
+    getConfigPath: () => join(dir, "opencode.json"),
+    getAgentsMdPath: () => agentsMdPath,
+  });
+  try {
+    const result = adapter.installSkills({ name: "meko", dryRun: true, log: silentLog(), scope: "user" });
+    assert.equal(result.skills, "dry-run");
+    assert.equal(existsSync(agentsMdPath), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
