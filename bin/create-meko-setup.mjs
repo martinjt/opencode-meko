@@ -70,7 +70,7 @@ function readVersion() {
   return pkg.version;
 }
 
-const ALL_CLIENTS = ['claude-code', 'claude-desktop', 'cursor', 'codex'];
+const ALL_CLIENTS = ['claude-code', 'claude-desktop', 'cursor', 'codex', 'opencode'];
 
 function printHelp() {
   const text = `
@@ -100,11 +100,14 @@ Examples:
   # Install for OpenAI Codex (CLI + Desktop App share the same config):
   create-meko-setup --client codex --yes
 
+  # Install for opencode (local Meko, project scope):
+  create-meko-setup --client opencode --local --scope project --yes
+
   # Local Meko (docker-compose stack, Claude Code):
   create-meko-setup --local --yes
 
 Options:
-  --client <list>       Target clients: one or more of claude-code, claude-desktop, cursor, codex.
+  --client <list>       Target clients: one or more of claude-code, claude-desktop, cursor, codex, opencode.
                         "claude" is accepted as an alias for claude-code.
                         Comma-separated, or "all" to target every supported client (default: claude-code)
                         codex covers BOTH the OpenAI Codex CLI and the Codex Desktop App
@@ -442,6 +445,7 @@ async function main() {
         'claude-desktop': 'Claude Desktop',
         cursor: 'Cursor',
         codex: 'OpenAI Codex (CLI + App)',
+        opencode: 'opencode',
       }[id];
       return {
         label: id,

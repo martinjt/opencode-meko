@@ -20,7 +20,7 @@
     "bundle-assets": "node scripts/bundle-assets.mjs",
     "test": "node --test \"test/*.mjs\"",
     "smoke": "./scripts/prepublish-smoke.sh",
-    "test:unit": "node --test test/config.test.mjs test/validate.test.mjs test/clients.test.mjs",
+    "test:unit": "node --test test/opencode-config.test.mjs test/opencode-client.test.mjs test/opencode-plugin.test.mjs",
     "test:integration": "RUN_INSTALLER_INTEGRATION=1 node --test test/installer.test.mjs",
     "test:integration:cloud": "RUN_INSTALLER_INTEGRATION=1 node --test test/installer.test.mjs"
   },
