@@ -235,20 +235,60 @@ Codex's `removeAgentsMdBlock`). Returns the same
 `validateConfig` mirrors Cursor's: re-read the config, confirm the `mcp`
 entry exists with the right URL and a User-Agent header.
 
-## Open questions / spikes (do before/at the start of implementation)
+## Spikes — resolved
 
-1. Exact `mcp` remote-server JSON schema (field names, `type` value) —
-   check `https://opencode.ai/config.json` or `opencode mcp add --help`.
-2. Plugin auto-discovery directory convention, if any.
-3. Exact `Event` union members relevant to session start/end, and the SDK
-   call shape for listing a session's messages.
-4. Global `AGENTS.md` path and whether project-root `AGENTS.md` needs any
-   config to be picked up.
-5. Whether opencode plugins can read process env vars, or need config baked
-   in at file-write time, for `MEKO_MCP_URL`/`MEKO_API_KEY`.
+Checked against the locally installed opencode v1.17.20 SDK type
+definitions (`@opencode-ai/sdk/dist/gen/types.gen.d.ts`,
+`@opencode-ai/plugin/dist/index.d.ts`) and `opencode.ai/docs/rules`:
 
-None of these block writing the adapter's skeleton and the MCP-registration
-piece (which only needs #1); they block the hooks piece specifically.
+1. **MCP remote schema — confirmed.** `McpRemoteConfig = { type: "remote",
+   url: string, enabled?: boolean, headers?: {[k:string]:string}, oauth?,
+   timeout? }`, under `Config.mcp: {[name]: McpLocalConfig |
+   McpRemoteConfig}`. Matches the spec's original guess exactly.
+2. **Plugin wiring — resolved by going explicit, not by relying on
+   discovery.** `Config.plugin?: Array<string>` is a real, confirmed field.
+   A live example on this machine (`~/.config/opencode/plugins/rtk.ts`,
+   auto-loaded with no `plugin` array entry) confirms
+   `~/.config/opencode/plugins/` IS an auto-discovery directory for user
+   scope, but there's no confirmed equivalent for project scope — so the
+   adapter uses the explicit `plugin` array entry for both scopes
+   (deterministic, testable, consistent with how every other piece of
+   config in this codebase is JSON-edited rather than convention-based).
+3. **Hook surface — confirmed, richer than assumed.** Relevant `Hooks`
+   members (`@opencode-ai/plugin`'s `Hooks` interface): `event` (fed the
+   SDK's `Event` union — `EventSessionCreated` `{type:"session.created",
+   properties:{info:Session}}`, `EventSessionIdle`
+   `{type:"session.idle", properties:{sessionID}}`), and
+   `"experimental.session.compacting"` (fires before compaction — a clean
+   `PreCompact` analog) and `"experimental.chat.system.transform"`
+   (`(input:{sessionID?,model}, output:{system:string[]})` — lets a plugin
+   push extra context into the system prompt, used here for the
+   memory-preload that Claude's `SessionStart` `additionalContext` does).
+   opencode sessions are long-lived/resumable (no single hard "end" like a
+   Claude Code CLI invocation), so instead of a `SessionEnd` equivalent,
+   the plugin captures on `session.idle` (fires once each assistant turn
+   completes) — a better fit for opencode's model, not a lesser one.
+   Messages are fetched via the SDK client every plugin receives:
+   `client.session.messages({ path: { id: sessionID } })` →
+   `Array<{ info: Message, parts: Part[] }>` where `Message = UserMessage |
+   AssistantMessage`, `AssistantMessage.parentID` linking back to the
+   `UserMessage` it replies to — this is what makes transcript-file parsing
+   unnecessary; exchanges are paired directly from this array.
+4. **AGENTS.md — confirmed.** opencode auto-loads project-root `AGENTS.md`
+   (searched upward through parent directories) and
+   `~/.config/opencode/AGENTS.md` (global), no config needed. `instructions`
+   in `opencode.json` is for *additional* files beyond these defaults, not
+   required for the default ones. Codex's `upsertAgentsMdBlock` /
+   `removeAgentsMdBlock` are reused as designed.
+5. **Env vars — resolved by not depending on them.** Rather than assume
+   opencode plugins inherit the installer process's env, the adapter writes
+   a small `meko-memory.config.json` (mode 0600) next to the installed
+   plugin file, and the plugin reads that at load time (falling back to
+   `process.env.MEKO_MCP_URL`/`MEKO_API_KEY` if the file is missing, mostly
+   for local dev/testing of the plugin file in isolation).
+
+See `docs/superpowers/plans/2026-08-04-opencode-client-adapter.md` for the
+resulting implementation plan.
 
 ## Testing
 
