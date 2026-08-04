@@ -1546,38 +1546,30 @@ git commit -m "Wire opencode into the CLI entry point"
 
 This task has no automated steps; it's the spec's "does it actually work end to end" gate, and it's where the three items ported/designed on inference rather than 100%-certain fact get their real confirmation: the `client.session.messages(...)` response shape (`response.data` vs bare array — the plugin code defensively handles both, confirm which one it actually is), whether opencode auto-loads a plugin referenced only via the `plugin` array (vs also needing the auto-discovery directory), and that `experimental.chat.system.transform`'s `output.system` really is a pre-populated, push-able array.
 
-- [ ] **Step 1: Dry-run against the local opencode config**
+- [x] **Step 1: Dry-run against the local opencode config**
 
 ```bash
 node bin/create-meko-setup.mjs --client opencode --local --yes --dry-run
 ```
 Confirm the printed plan mentions `opencode.json`, the plugin path, and the AGENTS.md path under `~/.config/opencode/`.
 
-- [ ] **Step 2: Real run against local Meko (or cloud, with a test API key)**
+- [x] **Step 2: Real run against local Meko (or cloud, with a test API key)**
 
-```bash
-node bin/create-meko-setup.mjs --client opencode --local --yes
-```
-Confirm: `~/.config/opencode/opencode.json` now has `mcp.meko` and a `plugin` entry; `~/.config/opencode/plugin/meko-memory.mjs` and `meko-memory.config.json` exist (config file mode 600); `~/.config/opencode/AGENTS.md` has the sentinel-fenced Meko block.
+**Adapted:** no Meko server was reachable (no local docker-compose stack — the server's source lives in the private `yugabyte/meko-mcp-server` repo we don't have access to — and no cloud API key). Rather than write into the real `~/.config/opencode/opencode.json` (which has substantial pre-existing provider/agent config) against a backend that couldn't be verified anyway, this ran isolated: `--client opencode --local --scope project --yes --skip-validation` inside a scratch directory. Confirmed: `opencode.json` got `mcp.meko` (type/url/enabled/headers) and a `plugin` array entry; `.opencode/plugin/meko-memory.mjs` and `meko-memory.config.json` (mode 0600) were created; `AGENTS.md` got the sentinel-fenced block.
 
-- [ ] **Step 3: Launch opencode and confirm the MCP tools resolve**
+- [x] **Step 3: Confirm the MCP entry and plugin load against the real opencode binary**
 
-```bash
-opencode
-```
-Inside the TUI, confirm the `meko` MCP server shows as connected (`/mcp` or equivalent status view) and its tools (`memory_search`, `memory_add`, etc.) are callable.
+**Adapted (no TUI session, non-interactive check instead):** ran `opencode mcp list --print-logs` from inside the scratch project (real opencode v1.17.20 binary, not simulated). Confirmed: `meko` appears as a `remote` MCP server and opencode attempts to connect (`SSE error: Unable to connect` — the correct, expected failure with no server at `localhost:8000`, not a config-format rejection). This is what surfaced the plugin bug below.
 
-- [ ] **Step 4: Have a real conversation and confirm capture worked**
+- [ ] **Step 4: Have a real conversation and confirm capture worked** — **not done**, deferred. Requires a reachable Meko server (local repo access or a cloud API key), which wasn't available. Do this once one is available: send a couple of turns in a real opencode session, let it go idle, then check Meko for a conversation tagged `opencode:<repo-basename>`.
 
-Send a couple of turns, let the session go idle, then check Meko (via its own tools/console) for a new conversation tagged with agent id `opencode:<repo-basename>`. If nothing shows up, check opencode's logs for `[meko]`-prefixed warnings from the plugin (`opencode --print-logs` or the log dir under `~/.local/share/opencode/log/`) to see which step failed, and fix forward — this is the step most likely to surface a wrong assumption about the `Hooks`/`Event` API.
+- [x] **Step 5: Uninstall and confirm cleanup**
 
-- [ ] **Step 5: Uninstall and confirm cleanup**
+Exercised via the unit tests in Task 5 (`uninstall removes the mcp entry, the plugin, and the AGENTS.md block`) rather than a second manual pass — the isolated scratch directories were deleted directly instead of round-tripped through `--uninstall`, since nothing in Step 2/3 depended on it surviving.
 
-```bash
-node bin/create-meko-setup.mjs --client opencode --uninstall --yes
-```
-Confirm `mcp.meko` and the `plugin` entry are gone from `opencode.json`, the plugin directory is removed, and the AGENTS.md block is stripped.
+- [x] **Step 6: Record findings — two real bugs found and fixed**
 
-- [ ] **Step 6: Record findings**
+1. **Plugin export contract (found via Step 3).** opencode's plugin loader treats every top-level export of a file in `opencode.json`'s `plugin` array as a plugin candidate and requires each to be callable — confirmed with a minimal repro (`export const X = async () => {}` plus one non-function named export fails with `"Plugin export is not a function"`; the same file without the non-function export loads cleanly). `meko-memory.mjs`'s `__TEST__` export (bundling `deriveAgentId`/`extractExchanges`/etc. for unit tests) broke real plugin loading. Fixed by moving those pure functions into `assets/opencode-plugin/exchange-helpers.mjs` (never referenced in opencode's `plugin` array, so opencode never introspects its exports) and adding a regression test asserting every export of `meko-memory.mjs` is a function. Re-verified against the real binary: no more `"failed to load plugin"` error.
+2. **AGENTS.md skill-path mismatch (found by inspection during Step 2).** The reused Codex `renderAgentsMdBlock` hardcoded `~/.agents/skills/meko-mcp-tools/SKILL.md` in its output — a path the opencode adapter never installs anything at. Fixed by adding an optional `skillPath` param to `upsertAgentsMdBlock`/`renderAgentsMdBlock` (defaults to Codex's existing path, so Codex/Cursor/Claude Desktop output is unchanged) and having opencode's `installSkills` pass `skillPath: null` to omit the line.
 
-If Steps 3-4 surfaced a wrong assumption (response shape, event timing, etc.), fix `assets/opencode-plugin/meko-memory.mjs` accordingly, re-run the affected unit tests (Task 4), and commit the fix with a message describing what was wrong (e.g. "Fix meko-memory plugin: client.session.messages() returns the array directly, not {data: [...]}"). This closes the loop the design spec flagged as needing real-opencode confirmation.
+Both fixes are committed with tests. Step 4 (real capture end-to-end) remains the one unverified piece — the design's biggest inference (the `client.session.messages()` response shape, `session.created`/`session.idle` timing, and `experimental.chat.system.transform`'s `output.system` being pre-populated/pushable) is still unconfirmed against a live Meko backend. Do Step 4 before considering this adapter fully proven, not just code-complete.
