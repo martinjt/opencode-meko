@@ -1,0 +1,51 @@
+{
+  "name": "@yugabytedb/meko-mcp",
+  "version": "2.1.0",
+  "description": "Single-line installer for Meko MCP Server across Claude and Cursor clients",
+  "type": "module",
+  "bin": {
+    "create-meko-setup": "bin/create-meko-setup.mjs",
+    "meko-mcp": "bin/create-meko-setup.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "assets/",
+    "scripts/bundle-assets.mjs",
+    "README.md"
+  ],
+  "scripts": {
+    "prepack": "node scripts/bundle-assets.mjs",
+    "postpack": "node scripts/bundle-assets.mjs --clean",
+    "bundle-assets": "node scripts/bundle-assets.mjs",
+    "test": "node --test \"test/*.mjs\"",
+    "smoke": "./scripts/prepublish-smoke.sh",
+    "test:unit": "node --test test/config.test.mjs test/validate.test.mjs test/clients.test.mjs",
+    "test:integration": "RUN_INSTALLER_INTEGRATION=1 node --test test/installer.test.mjs",
+    "test:integration:cloud": "RUN_INSTALLER_INTEGRATION=1 node --test test/installer.test.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "meko",
+    "mcp",
+    "claude-code",
+    "yugabytedb",
+    "installer",
+    "ai-memory",
+    "model-context-protocol"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yugabyte/meko-mcp-server.git",
+    "directory": "installer"
+  },
+  "homepage": "https://mekodata.netlify.app/",
+  "license": "Apache-2.0",
+  "author": "YugaByte <info@yugabyte.com>",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
