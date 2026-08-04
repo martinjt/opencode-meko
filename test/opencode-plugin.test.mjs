@@ -1,9 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { __TEST__ } from "../assets/opencode-plugin/meko-memory.mjs";
-
-const { deriveAgentId, extractExchanges, textOf, reasoningOf } = __TEST__;
+import {
+  deriveAgentId,
+  extractExchanges,
+  textOf,
+  reasoningOf,
+} from "../assets/opencode-plugin/exchange-helpers.mjs";
 
 test("deriveAgentId: repo-scoped bucket from directory basename", () => {
   assert.equal(deriveAgentId("/home/martin/repos/martinjt/opencode-meko"), "opencode:opencode-meko");
@@ -73,4 +76,18 @@ test("extractExchanges: skips an assistant message with no finish (still in prog
     { info: { id: "a1", role: "assistant", parentID: "u1" }, parts: [{ type: "text", text: "" }] },
   ];
   assert.equal(extractExchanges(messages, null).length, 0);
+});
+
+test("meko-memory.mjs: every top-level export is a function", async () => {
+  // Regression guard for a real bug found during the manual smoke test:
+  // opencode's plugin loader treats EVERY top-level export of a file listed
+  // in opencode.json's `plugin` array as a plugin candidate and requires
+  // each one to be callable — a non-function export (the previous __TEST__
+  // object) made the whole plugin fail to load with "Plugin export is not
+  // a function". This is why the pure helpers live in exchange-helpers.mjs
+  // instead of being exported from here.
+  const mod = await import("../assets/opencode-plugin/meko-memory.mjs");
+  for (const [name, value] of Object.entries(mod)) {
+    assert.equal(typeof value, "function", `export "${name}" must be a function`);
+  }
 });

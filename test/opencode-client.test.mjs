@@ -187,6 +187,12 @@ test("installSkills writes a sentinel-fenced Meko block to AGENTS.md", () => {
     const content = readFileSync(agentsMdPath, "utf8");
     assert.match(content, /meko:start/);
     assert.match(content, /mcp__meko__memory_search/);
+    // Found during the manual smoke test: opencode has no skills directory
+    // (unlike Codex, which the shared block-render logic was written for) —
+    // the block must not reference a Codex-only path that opencode never
+    // installs.
+    assert.doesNotMatch(content, /Skill details/);
+    assert.doesNotMatch(content, /\.agents\/skills/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
