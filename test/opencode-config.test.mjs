@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -54,7 +55,13 @@ test("getOpencodePluginConfigPath: sits next to the install path", () => {
   );
 });
 
-test("resolveOpencodePluginSource: points at the shipped plugin asset", () => {
+test("resolveOpencodePluginSource: points at the plugin asset DIRECTORY, containing both the entry file and its sibling import", () => {
+  // Regression guard for a real bug: this used to point at the single
+  // meko-memory.mjs file, so installStableTree never copied its sibling
+  // exchange-helpers.mjs (a relative import meko-memory.mjs depends on) —
+  // the plugin failed to load at runtime with no error surfaced anywhere.
   const source = resolveOpencodePluginSource();
-  assert.ok(source.endsWith(join("opencode-plugin", "meko-memory.mjs")));
+  assert.ok(source.endsWith("opencode-plugin"));
+  assert.equal(existsSync(join(source, "meko-memory.mjs")), true);
+  assert.equal(existsSync(join(source, "exchange-helpers.mjs")), true);
 });

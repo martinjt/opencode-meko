@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { createOpencodeAdapter } from "../lib/clients/opencode.mjs";
 
@@ -238,12 +238,7 @@ function makeFullFixture() {
   const agentsMdPath = join(dir, "AGENTS.md");
   const pluginInstallPath = join(dir, "plugin", "meko-memory.mjs");
   const pluginConfigPath = join(dir, "plugin", "meko-memory.config.json");
-  const pluginSourcePath = join(
-    process.cwd(),
-    "assets",
-    "opencode-plugin",
-    "meko-memory.mjs",
-  );
+  const pluginSourcePath = join(process.cwd(), "assets", "opencode-plugin");
   const adapter = createOpencodeAdapter({
     getConfigPath: () => configPath,
     getAgentsMdPath: () => agentsMdPath,
@@ -267,6 +262,11 @@ test("setHookEnvironment copies the plugin, writes its config, and wires opencod
     });
 
     assert.equal(existsSync(pluginInstallPath), true);
+    // Regression guard: meko-memory.mjs imports ./exchange-helpers.mjs by
+    // relative path — it must be copied alongside the entry file, not just
+    // the entry file on its own (see resolveOpencodePluginSource's doc
+    // comment for the bug this caught).
+    assert.equal(existsSync(join(dirname(pluginInstallPath), "exchange-helpers.mjs")), true);
     const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf8"));
     assert.equal(pluginConfig.url, "https://mcp.mekodata.ai/mcp");
     assert.equal(pluginConfig.apiKey, "test-key");
